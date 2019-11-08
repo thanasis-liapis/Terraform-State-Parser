@@ -34,3 +34,4 @@ In case of creating an infrastructure with no floating ips, the ip that will be 
 
 Requires terraform v0.12.x. Supports only terraform state files of version 4.
 
+Tfstate2inventory v5 includes fix for error produced when no resources of one or more modules existed in an IaC configuration.

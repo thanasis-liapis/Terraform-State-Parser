@@ -4,8 +4,8 @@
 # generating a dynamic ansible inventory file using
 # terraform show command
 #
-# Date: 20191024
-# Version: v4.0
+# Date: 20191106
+# Version: v5.0
 #
 # - This version supports infrastructure that is created 
 #   1. using only root module resources.
@@ -76,7 +76,7 @@ else:
 
 if os.path.exists(TERRAFORMSTATEFILE) and os.access(TERRAFORMSTATEFILE, os.R_OK):
   try:
-    tfstatejson = subprocess.Popen(["terraform","show","-json",TERRAFORMSTATEFILE], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    tfstatejson = subprocess.Popen(["./terraform","show","-json",TERRAFORMSTATEFILE], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   except subprocess.CalledProcessError as sperr:
     sys.stderr.write('Error[705] ::: Error when executing terraform command.\n'+sperr.output+'\n')
     sys.exit(705)
@@ -95,61 +95,67 @@ terraformstate = json.loads(cmdout)
 # Populate list of recourses with the resources created in the root module.
 try:
   for resource_index in range(len(terraformstate['values']['root_module']['resources'])):
-    if 'openstack_compute_instance_v2' in terraformstate['values']['root_module']['resources'][resource_index]['address']:
-      computeresourceattr = {}
-      computeresourceattr['id'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['id']
-      computeresourceattr['metadata_cluster'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['cluster']
-      if 'ansible_extra_groups' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
-        computeresourceattr['metadata_ansible_extra_groups'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_extra_groups']
-      if 'ansible_port' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
-        computeresourceattr['metadata_ansible_port'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_port']
-      if 'ansible_user' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
-        computeresourceattr['metadata_ansible_user'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_user']
-      if 'ansible_ssh_private_key_file' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
-        computeresourceattr['metadata_ansible_ssh_private_key_file'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_ssh_private_key_file']
-      computeresourceattr['name'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['name']
-      try:
-        computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['network'][int(nic)]['fixed_ip_v4']
-      except IndexError:
-        sys.stderr.write('INFO ::: NIC with index '+nic+' does not exist on host with id '+computeresourceattr['id']+'. Auto revert index to 0..\n')
-        computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['network'][0]['fixed_ip_v4']
-      allcomputeresourcesattr.append(computeresourceattr)
-    elif 'openstack_compute_floatingip_associate_v2' in terraformstate['values']['root_module']['resources'][resource_index]['address']:
-      floatingresourceattr = {}
-      floatingresourceattr['instance_id'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['instance_id']
-      floatingresourceattr['floating_ip'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['floating_ip']
-      allfloatingresourcesattr.append(floatingresourceattr)
+    try:
+      if 'openstack_compute_instance_v2' in terraformstate['values']['root_module']['resources'][resource_index]['address']:
+        computeresourceattr = {}
+        computeresourceattr['id'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['id']
+        computeresourceattr['metadata_cluster'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['cluster']
+        if 'ansible_extra_groups' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata'] and terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_extra_groups']:
+          computeresourceattr['metadata_ansible_extra_groups'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_extra_groups']
+        if 'ansible_port' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
+          computeresourceattr['metadata_ansible_port'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_port']
+        if 'ansible_user' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
+          computeresourceattr['metadata_ansible_user'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_user']
+        if 'ansible_ssh_private_key_file' in terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']:
+          computeresourceattr['metadata_ansible_ssh_private_key_file'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['metadata']['ansible_ssh_private_key_file']
+        computeresourceattr['name'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['name']
+        try:
+          computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['network'][int(nic)]['fixed_ip_v4']
+        except IndexError:
+          sys.stderr.write('INFO ::: NIC with index '+nic+' does not exist on host with id '+computeresourceattr['id']+'. Auto revert index to 0..\n')
+          computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['network'][0]['fixed_ip_v4']
+        allcomputeresourcesattr.append(computeresourceattr)
+      elif 'openstack_compute_floatingip_associate_v2' in terraformstate['values']['root_module']['resources'][resource_index]['address']:
+        floatingresourceattr = {}
+        floatingresourceattr['instance_id'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['instance_id']
+        floatingresourceattr['floating_ip'] = terraformstate['values']['root_module']['resources'][resource_index]['values']['floating_ip']
+        allfloatingresourcesattr.append(floatingresourceattr)
+    except KeyError:
+      sys.stderr.write('INFO ::: Root module with no data found.\n')
 except KeyError:
   sys.stderr.write('INFO ::: No root module resources found.\n')
 
 # Populate list of recourses with the resources created in child modules.
 try:
   for resource_index in range(len(terraformstate['values']['root_module']['child_modules'])):
-    for child_resource_index in range(len(terraformstate['values']['root_module']['child_modules'][resource_index]['resources'])):
-      if 'openstack_compute_instance_v2' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['address']:
-        computeresourceattr = {}
-        computeresourceattr['id'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['id']
-        computeresourceattr['metadata_cluster'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['cluster']
-        if 'ansible_extra_groups' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
-          computeresourceattr['metadata_ansible_extra_groups'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_extra_groups']
-        if 'ansible_port' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
-          computeresourceattr['metadata_ansible_port'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_port']
-        if 'ansible_user' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
-          computeresourceattr['metadata_ansible_user'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_user']
-        if 'ansible_ssh_private_key_file' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
-          computeresourceattr['metadata_ansible_ssh_private_key_file'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_ssh_private_key_file']
-        computeresourceattr['name'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['name']
-        try:
-          computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['network'][int(nic)]['fixed_ip_v4']
-        except IndexError:
-          sys.stderr.write('INFO ::: NIC with index '+nic+' does not exist on host with id '+computeresourceattr['id']+'. Auto revert index to 0..\n')
-          computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['network'][0]['fixed_ip_v4']
-        allcomputeresourcesattr.append(computeresourceattr)
-      elif 'openstack_compute_floatingip_associate_v2' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['address']:
-        floatingresourceattr = {}
-        floatingresourceattr['instance_id'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['instance_id']
-        floatingresourceattr['floating_ip'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['floating_ip']
-        allfloatingresourcesattr.append(floatingresourceattr)
+    try:
+      for child_resource_index in range(len(terraformstate['values']['root_module']['child_modules'][resource_index]['resources'])):
+        if 'openstack_compute_instance_v2' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['address']:
+          computeresourceattr = {}
+          computeresourceattr['id'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['id']
+          computeresourceattr['metadata_cluster'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['cluster']
+          if 'ansible_extra_groups' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata'] and terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_extra_groups']:
+            computeresourceattr['metadata_ansible_extra_groups'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_extra_groups']
+          if 'ansible_port' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
+            computeresourceattr['metadata_ansible_port'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_port']
+          if 'ansible_user' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
+            computeresourceattr['metadata_ansible_user'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_user']
+          if 'ansible_ssh_private_key_file' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']:
+            computeresourceattr['metadata_ansible_ssh_private_key_file'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['metadata']['ansible_ssh_private_key_file']
+          computeresourceattr['name'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['name']
+          try:
+            computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['network'][int(nic)]['fixed_ip_v4']
+          except IndexError:
+            sys.stderr.write('INFO ::: NIC with index '+nic+' does not exist on host with id '+computeresourceattr['id']+'. Auto revert index to 0..\n')
+            computeresourceattr['network.0.fixed_ip_v4'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['network'][0]['fixed_ip_v4']
+          allcomputeresourcesattr.append(computeresourceattr)
+        elif 'openstack_compute_floatingip_associate_v2' in terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['address']:
+          floatingresourceattr = {}
+          floatingresourceattr['instance_id'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['instance_id']
+          floatingresourceattr['floating_ip'] = terraformstate['values']['root_module']['child_modules'][resource_index]['resources'][child_resource_index]['values']['floating_ip']
+          allfloatingresourcesattr.append(floatingresourceattr)
+    except KeyError:
+      sys.stderr.write('INFO ::: Module with no data found.\n')
 except KeyError:
   sys.stderr.write('INFO ::: No child module resources found.\n')
 

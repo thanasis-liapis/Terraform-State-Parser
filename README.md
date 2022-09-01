@@ -28,10 +28,18 @@ The primary group of each host (defined by an openstack compute instance v2) is 
 This version supports infrastructure that is created 
 1. using only root module resources.
 2. using only child module resources.
-3. using both root and child module resiources.
+3. using both root and child module resources.
 
-In case of creating an infrastructure with no floating ips, the ip that will be used for remote connection is the ip of the network interface that will be defined in the cmd. If no NIC index is given, NIC 0 is used.
+Supports both fixed and floating ips for inventory file. Depending on the index given the corresponding NIC is used.
+For example, if 'fixed 1' is given as input, then the IPs assigned to the eth1 NIC are used in the inventory. If eth1 does not exist, then the eth0 is used.
+If no NIC index is given, NIC 0 is used. If 'floating 1' is given as input, then the floating IP associated with the eth1 NIC is used. If no floating IP is associated
+with the specified NIC, then the corresponding value in the inventory file will be 'null'.
+
+Supports both floating ips created dynamically and floating ip associated with fixed ips (pre-existing floating ips). In order to use the floating ips provided by the 
+openstack_networking_floatingip_associate_v2 module, use 'floating <index> associate'. If, on the other hand, you want to use floating ips created dynamically and provided
+by the openstack_networking_floatingip_v2 module, use 'floating <index> ip'. The latter is the default, if no value is given.
+
+Supports setting variable [ansible_python_interpreter] into inventory file for ansible
 
 Requires terraform v0.12.x. Supports only terraform state files of version 4.
 
-Tfstate2inventory v5 includes fix for error produced when no resources of one or more modules existed in an IaC configuration.
